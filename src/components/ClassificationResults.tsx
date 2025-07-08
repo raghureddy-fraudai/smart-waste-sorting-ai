@@ -51,6 +51,17 @@ const ClassificationResults: React.FC<ClassificationResultsProps> = ({
           </div>
         ) : currentItem ? (
           <div className="space-y-4">
+            {/* Display uploaded image if available */}
+            {currentItem.image && (
+              <div className="text-center">
+                <img 
+                  src={currentItem.image} 
+                  alt={currentItem.name}
+                  className="max-w-full max-h-32 mx-auto rounded-lg object-contain bg-slate-700/30 p-2"
+                />
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="text-2xl">{getCategoryIcon(currentItem.category)}</div>
@@ -103,6 +114,7 @@ const ClassificationResults: React.FC<ClassificationResultsProps> = ({
           <div className="text-center text-slate-400 py-8">
             <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Waiting for waste item detection...</p>
+            <p className="text-sm mt-2">Use camera feed or upload a photo</p>
           </div>
         )}
       </CardContent>

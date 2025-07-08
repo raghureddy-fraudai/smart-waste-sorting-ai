@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Play, Pause, RotateCcw, Zap, Recycle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import CameraFeed from './CameraFeed';
 import SortingBins from './SortingBins';
 import StatsPanel from './StatsPanel';
 import ClassificationResults from './ClassificationResults';
+import PhotoUpload from './PhotoUpload';
 
 export interface WasteItem {
   id: string;
@@ -93,6 +93,47 @@ const WasteSortingSystem = () => {
         return prev + 10;
       });
     }, 200);
+  };
+
+  const processUploadedImage = (file: File) => {
+    console.log('Processing uploaded image:', file.name);
+    
+    setIsProcessing(true);
+    setProcessingProgress(0);
+
+    // Simulate AI processing
+    const progressInterval = setInterval(() => {
+      setProcessingProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          
+          // Select random waste item for demonstration
+          const randomItem = wasteItems[Math.floor(Math.random() * wasteItems.length)];
+          const newItem: WasteItem = {
+            id: Date.now().toString(),
+            ...randomItem,
+            timestamp: new Date(),
+            image: URL.createObjectURL(file)
+          };
+
+          setCurrentItem(newItem);
+          setSortingHistory(prev => [newItem, ...prev.slice(0, 9)]);
+          setStats(prev => ({
+            ...prev,
+            [newItem.category]: prev[newItem.category] + 1,
+            total: prev.total + 1
+          }));
+
+          setTimeout(() => {
+            setIsProcessing(false);
+            setCurrentItem(null);
+          }, 4000);
+
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 150);
   };
 
   useEffect(() => {
@@ -199,9 +240,10 @@ const WasteSortingSystem = () => {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Camera and Classification */}
+          {/* Left Column - Camera, Upload, and Classification */}
           <div className="lg:col-span-2 space-y-6">
             <CameraFeed isRunning={isRunning} isProcessing={isProcessing} />
+            <PhotoUpload onImageUpload={processUploadedImage} isProcessing={isProcessing} />
             <ClassificationResults currentItem={currentItem} isProcessing={isProcessing} />
           </div>
 
