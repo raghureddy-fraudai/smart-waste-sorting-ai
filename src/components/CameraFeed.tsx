@@ -113,7 +113,7 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover"
               />
 
               {/* Processing overlay */}
