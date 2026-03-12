@@ -13,8 +13,8 @@ serve(async (req) => {
 
   try {
     const { imageBase64 } = await req.json();
-    if (!imageBase64) {
-      return new Response(JSON.stringify({ error: "No image provided" }), {
+    if (!imageBase64 || imageBase64 === "data:," || imageBase64.length < 100) {
+      return new Response(JSON.stringify({ error: "No valid image provided. Please capture a clear frame." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
