@@ -60,6 +60,8 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
   const captureFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current || !onFrameCapture) return;
     const video = videoRef.current;
+    // Don't capture if video isn't ready or has no dimensions
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
