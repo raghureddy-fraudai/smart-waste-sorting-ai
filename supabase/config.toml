@@ -1,0 +1,4 @@
+project_id = "avvwperradmoekkalsei"
+
+[functions.classify-waste]
+verify_jwt = false

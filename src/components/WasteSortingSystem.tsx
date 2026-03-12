@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Play, Pause, RotateCcw, Zap, Recycle, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, RotateCcw, Zap, Recycle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import CameraFeed from './CameraFeed';
 import SortingBins from './SortingBins';
 import StatsPanel from './StatsPanel';
@@ -38,131 +40,93 @@ const WasteSortingSystem = () => {
     metal: 0,
     organic: 0,
     total: 0,
-    accuracy: 95.8
+    accuracy: 0,
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
 
-  // Simulate waste items for demonstration
-  const wasteItems = [
-    { name: 'Plastic Bottle', category: 'plastic' as const, confidence: 0.96 },
-    { name: 'Newspaper', category: 'paper' as const, confidence: 0.93 },
-    { name: 'Aluminum Can', category: 'metal' as const, confidence: 0.98 },
-    { name: 'Apple Core', category: 'organic' as const, confidence: 0.91 },
-    { name: 'Cardboard Box', category: 'paper' as const, confidence: 0.94 },
-    { name: 'Plastic Bag', category: 'plastic' as const, confidence: 0.89 },
-    { name: 'Tin Can', category: 'metal' as const, confidence: 0.97 },
-    { name: 'Banana Peel', category: 'organic' as const, confidence: 0.92 }
-  ];
-
-  const processNewItem = () => {
-    if (!isRunning) return;
-
+  const classifyWithAI = async (imageBase64: string, imageUrl?: string) => {
+    if (isProcessing) return;
     setIsProcessing(true);
-    setProcessingProgress(0);
+    setProcessingProgress(20);
 
-    // Simulate processing time with progress
-    const progressInterval = setInterval(() => {
-      setProcessingProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          
-          // Select random waste item
-          const randomItem = wasteItems[Math.floor(Math.random() * wasteItems.length)];
-          const newItem: WasteItem = {
-            id: Date.now().toString(),
-            ...randomItem,
-            timestamp: new Date()
-          };
+    try {
+      setProcessingProgress(50);
 
-          setCurrentItem(newItem);
-          setSortingHistory(prev => [newItem, ...prev.slice(0, 9)]);
-          setStats(prev => ({
-            ...prev,
-            [newItem.category]: prev[newItem.category] + 1,
-            total: prev.total + 1
-          }));
-
-          setTimeout(() => {
-            setIsProcessing(false);
-            setCurrentItem(null);
-          }, 3000);
-
-          return 100;
-        }
-        return prev + 10;
+      const { data, error } = await supabase.functions.invoke('classify-waste', {
+        body: { imageBase64 },
       });
-    }, 200);
+
+      if (error) {
+        throw new Error(error.message || 'Classification failed');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      setProcessingProgress(90);
+
+      const newItem: WasteItem = {
+        id: Date.now().toString(),
+        name: data.name || 'Unknown Item',
+        category: data.category || 'organic',
+        confidence: data.confidence || 0.7,
+        timestamp: new Date(),
+        image: imageUrl,
+      };
+
+      setCurrentItem(newItem);
+      setSortingHistory((prev) => [newItem, ...prev.slice(0, 9)]);
+      setStats((prev) => ({
+        ...prev,
+        [newItem.category]: prev[newItem.category] + 1,
+        total: prev.total + 1,
+        accuracy: prev.total === 0 ? newItem.confidence * 100 : 
+          ((prev.accuracy * prev.total) + (newItem.confidence * 100)) / (prev.total + 1),
+      }));
+      setProcessingProgress(100);
+
+      toast.success(`Classified: ${newItem.name} → ${newItem.category}`, {
+        description: `Confidence: ${(newItem.confidence * 100).toFixed(1)}%`,
+      });
+
+      setTimeout(() => {
+        setCurrentItem(null);
+      }, 4000);
+    } catch (err) {
+      console.error('Classification error:', err);
+      toast.error('Classification failed', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsProcessing(false);
+      setProcessingProgress(0);
+    }
+  };
+
+  const handleFrameCapture = (base64: string) => {
+    classifyWithAI(base64);
   };
 
   const processUploadedImage = (file: File) => {
-    console.log('Processing uploaded image:', file.name);
-    
-    setIsProcessing(true);
-    setProcessingProgress(0);
-
-    // Simulate AI processing
-    const progressInterval = setInterval(() => {
-      setProcessingProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          
-          // Select random waste item for demonstration
-          const randomItem = wasteItems[Math.floor(Math.random() * wasteItems.length)];
-          const newItem: WasteItem = {
-            id: Date.now().toString(),
-            ...randomItem,
-            timestamp: new Date(),
-            image: URL.createObjectURL(file)
-          };
-
-          setCurrentItem(newItem);
-          setSortingHistory(prev => [newItem, ...prev.slice(0, 9)]);
-          setStats(prev => ({
-            ...prev,
-            [newItem.category]: prev[newItem.category] + 1,
-            total: prev.total + 1
-          }));
-
-          setTimeout(() => {
-            setIsProcessing(false);
-            setCurrentItem(null);
-          }, 4000);
-
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 150);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      classifyWithAI(base64, URL.createObjectURL(file));
+    };
+    reader.readAsDataURL(file);
   };
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRunning) {
-      interval = setInterval(processNewItem, 5000);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning]);
 
   const toggleSystem = () => {
     setIsRunning(!isRunning);
-    if (!isRunning) {
-      processNewItem();
-    }
   };
 
   const resetSystem = () => {
     setIsRunning(false);
     setCurrentItem(null);
     setSortingHistory([]);
-    setStats({
-      plastic: 0,
-      paper: 0,
-      metal: 0,
-      organic: 0,
-      total: 0,
-      accuracy: 95.8
-    });
+    setStats({ plastic: 0, paper: 0, metal: 0, organic: 0, total: 0, accuracy: 0 });
     setIsProcessing(false);
     setProcessingProgress(0);
   };
@@ -179,7 +143,7 @@ const WasteSortingSystem = () => {
             <h1 className="text-4xl font-bold text-white">Smart Waste Sorting System</h1>
           </div>
           <p className="text-slate-300 text-lg max-w-2xl mx-auto">
-            AI-powered waste classification and sorting using computer vision and deep learning
+            AI-powered waste classification using real-time camera detection and deep learning
           </p>
         </div>
 
@@ -196,8 +160,8 @@ const WasteSortingSystem = () => {
               <Button
                 onClick={toggleSystem}
                 className={`${
-                  isRunning 
-                    ? 'bg-red-500 hover:bg-red-600' 
+                  isRunning
+                    ? 'bg-red-500 hover:bg-red-600'
                     : 'bg-green-500 hover:bg-green-600'
                 } text-white`}
               >
@@ -213,7 +177,7 @@ const WasteSortingSystem = () => {
                   </>
                 )}
               </Button>
-              
+
               <Button
                 onClick={resetSystem}
                 variant="outline"
@@ -224,12 +188,12 @@ const WasteSortingSystem = () => {
               </Button>
 
               <div className="flex items-center gap-2 ml-auto">
-                <Badge variant={isRunning ? "default" : "secondary"} className="text-sm">
+                <Badge variant={isRunning ? 'default' : 'secondary'} className="text-sm">
                   {isRunning ? 'Active' : 'Inactive'}
                 </Badge>
                 {isProcessing && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-300">Processing...</span>
+                    <span className="text-sm text-slate-300">Classifying...</span>
                     <Progress value={processingProgress} className="w-24" />
                   </div>
                 )}
@@ -240,14 +204,15 @@ const WasteSortingSystem = () => {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Camera, Upload, and Classification */}
           <div className="lg:col-span-2 space-y-6">
-            <CameraFeed isRunning={isRunning} isProcessing={isProcessing} />
+            <CameraFeed
+              isRunning={isRunning}
+              isProcessing={isProcessing}
+              onFrameCapture={handleFrameCapture}
+            />
             <PhotoUpload onImageUpload={processUploadedImage} isProcessing={isProcessing} />
             <ClassificationResults currentItem={currentItem} isProcessing={isProcessing} />
           </div>
-
-          {/* Right Column - Stats */}
           <div className="space-y-6">
             <StatsPanel stats={stats} />
           </div>
