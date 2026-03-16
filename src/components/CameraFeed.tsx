@@ -21,13 +21,15 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
     try {
       setCameraError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
       });
+
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setCameraActive(true);
     } catch (err) {
       console.error('Camera error:', err);
@@ -38,12 +40,15 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+
     if (videoRef.current) {
+      videoRef.current.pause();
       videoRef.current.srcObject = null;
     }
+
     setCameraActive(false);
   }, []);
 
@@ -53,32 +58,59 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
     } else {
       stopCamera();
     }
-    return () => stopCamera();
+
+    return () => {
+      stopCamera();
+    };
   }, [isRunning, startCamera, stopCamera]);
 
-  // Capture a frame and send to parent for AI classification
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+
+    if (!video || !stream || !cameraActive) return;
+
+    video.srcObject = stream;
+
+    const playVideo = async () => {
+      try {
+        await video.play();
+      } catch (err) {
+        console.error('Video playback error:', err);
+        setCameraError('Unable to display the camera preview');
+        setCameraActive(false);
+      }
+    };
+
+    playVideo();
+  }, [cameraActive]);
+
   const captureFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current || !onFrameCapture) return;
+
     const video = videoRef.current;
-    // Don't capture if video isn't ready or has no dimensions
     if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
+
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const base64 = canvas.toDataURL('image/jpeg', 0.8);
     onFrameCapture(base64);
   }, [onFrameCapture]);
 
-  // Auto-capture every 6 seconds when running and not processing
   useEffect(() => {
     if (!isRunning || !cameraActive || isProcessing) return;
-    const interval = setInterval(() => {
+
+    const interval = window.setInterval(() => {
       captureFrame();
     }, 6000);
-    return () => clearInterval(interval);
+
+    return () => window.clearInterval(interval);
   }, [isRunning, cameraActive, isProcessing, captureFrame]);
 
   return (
@@ -103,29 +135,45 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
       </CardHeader>
       <CardContent>
         <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden border border-slate-600">
-          {/* Hidden canvas for frame capture */}
           <canvas ref={canvasRef} className="hidden" />
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`absolute inset-0 h-full w-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+          />
 
-          {cameraActive ? (
-            <div className="relative w-full h-full">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+          {!cameraActive && (
+            <div className="flex h-full items-center justify-center text-slate-400">
+              <div className="text-center">
+                {cameraError ? (
+                  <>
+                    <VideoOff className="mx-auto mb-4 h-16 w-16 opacity-50" />
+                    <p className="text-lg text-red-400">Camera Unavailable</p>
+                    <p className="text-sm">{cameraError}</p>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="mx-auto mb-4 h-16 w-16 opacity-50" />
+                    <p className="text-lg">Camera Offline</p>
+                    <p className="text-sm">Start the system to activate camera feed</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
-              {/* Processing overlay */}
+          {cameraActive && (
+            <>
               {isProcessing && (
-                <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                  <div className="text-white text-lg font-semibold animate-pulse">
+                <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20">
+                  <div className="animate-pulse text-lg font-semibold text-white">
                     Analyzing Object...
                   </div>
                 </div>
               )}
 
-              {/* Manual capture button */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                 <Button
                   onClick={captureFrame}
@@ -133,37 +181,18 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ isRunning, isProcessing, onFram
                   className="bg-green-500 hover:bg-green-600 text-white"
                   size="sm"
                 >
-                  <Camera className="w-4 h-4 mr-2" />
+                  <Camera className="mr-2 h-4 w-4" />
                   Capture & Classify
                 </Button>
               </div>
 
-              {/* Camera info overlay */}
-              <div className="absolute top-4 left-4 text-green-400 text-sm font-mono">
+              <div className="absolute left-4 top-4 text-sm font-mono text-green-400">
                 <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                   REC
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-slate-400">
-              <div className="text-center">
-                {cameraError ? (
-                  <>
-                    <VideoOff className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg text-red-400">Camera Unavailable</p>
-                    <p className="text-sm">{cameraError}</p>
-                  </>
-                ) : (
-                  <>
-                    <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Camera Offline</p>
-                    <p className="text-sm">Start the system to activate camera feed</p>
-                  </>
-                )}
-              </div>
-            </div>
+            </>
           )}
         </div>
       </CardContent>
