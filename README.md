@@ -1,7 +1,7 @@
 # ♻️ Smart Waste Sorting AI
 
 <p align="center">
-  <img src="YOUR_PROJECT_BANNER_OR_SCREENSHOT_LINK" alt="Smart Waste Sorting AI Banner" width="100%">
+  <img src="https://raw.githubusercontent.com/raghureddy-fraudai/smart-waste-sorting-ai/refs/heads/main/assets/banner.png" alt="Smart Waste Sorting AI Banner" width="100%">
 </p>
 
 <h3 align="center">
