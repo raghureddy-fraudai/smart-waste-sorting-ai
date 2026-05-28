@@ -115,7 +115,15 @@ smart-waste-sorting-ai/
 
 ## 🖥️ System Interface
 
-(Add screenshots here)
+### Home Dashboard
+![Dashboard](assets/screenshots/dashboard.png)
+
+### Waste Upload Screen
+![Upload Page](assets/screenshots/upload-page.png)
+
+### classification and seggregation screen
+![Classification Seggregation Page](assets/screenshots/classification-seggregation-page.png)
+
 
 ## 🔍 AI Prediction Output
 
